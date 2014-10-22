@@ -1,0 +1,14 @@
+*.xlsx
+*.RData
+*.png
+*.html
+*.htm
+.RData
+.Rhistory
+
+.Code_files/
+
+# RStudio files
+.Rproj.user/
+Code.R
+Leave.R
