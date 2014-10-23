@@ -1,12 +1,31 @@
-```{r echo=FALSE}
+```{r echo=FALSE, include=FALSE}
+#############################################################################
+##             User Modifiable variables
+## These variables should be set whenever the underlying data source changes
+## or the reporting period changes.
+##
+## Ideally a new folder should be created for each report
+#############################################################################
+##
+## Change this to reflect newer files. This will be the name of the XL file
+FILENM <- "2014-Q3"
+##
+## The report period start and end dates. This cater for a situation in which
+## no sick was taken during the month successeding or preceeding the reporting 
+## period. 
+## THESE DATES ARE NOT VERIFIED AGAINST TRANSACTION DATES
+REPSTRTDT <- as.Date("2014-01-01", format="%Y-%m-%d")
+REPENDDT <- as.Date("2014-09-30", format="%Y-%m-%d")
+
 require(ggplot2)
-loadData <- function(FileNm) {
+require(zoo)
+loadData <- function(FILENM) {
     require(gdata)
-    data = read.xls(FileNm, sheet = 1, header = TRUE, blank.lines.skip=TRUE)
+    data = read.xls(FILENM, sheet = 1, header = TRUE, blank.lines.skip=TRUE)
     return (data)
 }
 
-cleanData <- function(data, FileNm) {
+cleanData <- function(data, FILENM) {
     data$X.ID <- NULL
     colnames(data) <- c("Code", "Dept","Name","Date","DOW","ShiftQty","ShiftDays","AbsenceCode")
     data$Date <- as.Date(data$Date)
@@ -24,28 +43,24 @@ cleanData <- function(data, FileNm) {
     
     # save the data for future processing
     FileProcDt <- format(Sys.time(), "%a %d/%m/%Y at %H:%M")
-    save(data, dataEmp, FileProcDt, file = FileNm)
+    save(data, dataEmp, FileProcDt, file = FILENM)
     
     return (data)
 }
 
-# Change this to reflect newer files
-FileNm <- "2014-Q3"
-
-FileRExt <- paste0(FileNm,".RData")
+FileRExt <- paste0(FILENM,".RData")
 if (file.exists(FileRExt)) {
     load(FileRExt)
 } else {
-    FileXLExt <- paste0(FileNm,".xlsx")
+    FileXLExt <- paste0(FILENM,".xlsx")
     
     if (!file.exists(FileXLExt)) {
-        stop(FileNm, " Not Found")
+        stop(FILENM, " Not Found")
     }
     
     data <- loadData(FileXLExt)
     data <- cleanData(data, FileRExt)
 }
-
 ```
 ---
 title: "Leave Analysis Report"
@@ -70,7 +85,7 @@ The source file is an export to xlsx format from the dakar system. The source da
 
 ## Data Analysis
 
-The data file consists of `r nrow(data)` entries spanning `r nrow(dataEmp)` employees. The period covered by the supplied data is from `r format(min(data$Date), "%A %d/%m/%Y")` to `r format(max(data$Date), "%A %d/%m/%Y")`. The total number of sick days covered in this report is `r sum(data$ShiftDays)`.
+The data file consists of `r nrow(data)` entries spanning `r nrow(dataEmp)` employees. The period covered by the supplied data is from `r format(REPSTRTDT, "%A %d/%m/%Y")` to `r format(REPENDDT, "%A %d/%m/%Y")` *(actual transactions span `r format(min(data$Date), "%A %d/%m/%Y")` to `r format(max(data$Date), "%A %d/%m/%Y")`)*. The total number of sick days covered in this report is `r sum(data$ShiftDays)`.
                  
 The list of employees present in the file are `r sort(dataEmp$Name)`. Of these `r length(dataEmp$Name[dataEmp$CurrEmp == TRUE])` employees (*`r dataEmp$Name[dataEmp$CurrEmp == TRUE]`*) are currently employed. 
 
@@ -85,7 +100,7 @@ y <- rep(1, length(x))
 # Pre-Allocate the table
 minYr = min(as.numeric(strftime(data$Date, "%Y")))
 maxYr = min(as.numeric(strftime(data$Date, "%Y")))
-# The table will contain the number of months in a year plus the number of records i the database.
+# The table will contain the number of months in a year.
 n <- (maxYr - minYr + 1)
 dt <- character(n)
 cnt <- numeric(n)
@@ -93,9 +108,8 @@ for (i in minYr:maxYr) {
     lev <- i - minYr + 1
     dt[lev] <- as.character(i)
     cnt[lev] <- 0
-    
-    tmp <- data.frame(dt, cnt, stringsAsFactors = FALSE)
 }
+tmp <- data.frame(dt, cnt, stringsAsFactors = FALSE)
 
 tmp <- rbind(tmp, data.frame(dt = x, cnt = y))
 tmp <- aggregate(cnt ~ dt, tmp, sum)
@@ -106,40 +120,90 @@ g + geom_bar(stat="identity") + ggtitle("Leave taken by Year") + xlab("Year") +
 
 ```
 
-The year(s) with the largest amount of sick days were **`r subset(tmp, cnt == max(cnt), select=dt)`**.
-The year(s) with the smallest amount of sick days were **`r subset(tmp, cnt == min(cnt), select=dt)`**. 
+The year(s) with the largest amount of sick days were **`r subset(tmp, cnt == max(cnt), select=dt, drop=TRUE)`**.
+The year(s) with the smallest amount of sick days were **`r subset(tmp, cnt == min(cnt), select=dt, drop=TRUE)`**. 
 
 ```{r bymonthYr, echo=FALSE}
 x <- strftime(data$Date, "%m-%Y") 
 y <- rep(1, length(x))
 
+RepStrtY <- as.numeric(format(REPSTRTDT, "%Y"))
+RepStrtM <- as.numeric(format(REPSTRTDT, "%m"))
+RepEndY <- as.numeric(format(REPENDDT, "%Y"))
+RepEndM <- as.numeric(format(REPENDDT, "%m"))
+
 # Pre-Allocate the table
-minYr = min(as.numeric(strftime(data$Date, "%Y")))
-maxYr = min(as.numeric(strftime(data$Date, "%Y")))
-# The table will contain the number of months in a year plus the number of records i the database.
-n <- (maxYr - minYr + 1) * 12
+# The table will contain the number of months in a year.
+n <- (RepEndY - RepStrtY + 1) * 12
 dt <- character(n)
 cnt <- numeric(n)
-for (i in minYr:maxYr) {
+for (i in RepStrtY:RepEndY) {
     for (j in c("01","02","03","04","05","06","07","08","09","10","11","12")) {
-        lev <- (i - minYr) * 12 + as.numeric(j)
-        dt[lev] <- paste0(j,"-",as.character(i))
-        cnt[lev] <- 0
-        
-        tmp <- data.frame(dt, cnt, stringsAsFactors = FALSE)
+        # Ignore of the date is larger than the processing date
+        intj <- as.numeric(j)
+        if ((i == RepStrtY) && (intj >= RepStrtM)) {
+            if ((i == RepEndY) && (intj <= RepEndM)) {
+                lev <- (i - RepStrtY) * 12 + intj
+                dt[lev] <- paste0(j,"-",as.character(i))
+                cnt[lev] <- 0
+                }
+            }
+        }
     }
-}
+tmp <- data.frame(dt, cnt, stringsAsFactors = FALSE)
 
 tmp <- rbind(tmp, data.frame(dt = x, cnt = y))
 tmp <- aggregate(cnt ~ dt, tmp, sum)
 
 g <- ggplot(tmp, (aes(x = dt, y = cnt)))
-g + geom_bar(stat="identity") + ggtitle("Leave taken by Quarter") + xlab("Month - Year") +
+g + geom_bar(stat="identity") + ggtitle("Leave taken by Month") + xlab("Month - Year") +
   ylab("Days") + theme(axis.text.x = element_text(angle = 90, hjust = 1))
 
 ```
 
-The month(s) with the largest amount of sick days were **`r subset(tmp, cnt == max(cnt), select=dt)`**.
+The periods(s) with the largest amount of sick days were **`r subset(tmp, cnt == max(cnt), select=dt, drop=TRUE)`**.
+
+
+```{r byquarterYr, echo=FALSE}
+x <- as.yearqtr(data$Date) 
+y <- rep(1, length(x))
+
+
+RepStrtY <- as.numeric(format(REPSTRTDT, "%Y"))
+RepStrtQ <- as.numeric(substr(quarters(REPSTRTDT), 2, 2))
+RepEndY <- as.numeric(format(REPENDDT, "%Y"))
+RepEndQ <- as.numeric(substr(quarters(REPENDDT), 2, 2))
+
+# Pre-Allocate the table
+# The table will contain 4 quarters per year.
+n <- (RepEndY - RepStrtY + 1) * 4
+dt <- character(n)
+cnt <- numeric(n)
+for (i in RepStrtY:RepEndY) {
+    for (j in 1:4) {
+        if ((i == RepStrtY) && (j >= RepStrtQ)) {
+            if ((i == RepEndY) && (intj <= RepEndQ)) {
+                lev <- (i - RepStrtY) * 4 + j
+                dt[lev] <- paste0(as.character(i), " Q", as.character(j))
+                cnt[lev] <- 0
+                }
+            }
+        }
+    }
+tmp <- data.frame(dt=as.yearqtr(dt), cnt = cnt, stringsAsFactors = FALSE)
+
+tmp <- rbind(tmp, data.frame(dt = x, cnt = y, stringsAsFactors = FALSE))
+tmp <- aggregate(cnt ~ dt, tmp, sum)
+
+g <- ggplot(tmp, (aes(x = as.character(dt), y = cnt)))
+g + geom_bar(stat="identity") + ggtitle("Leave taken by Quarter") + xlab("Quarter") +
+  ylab("Days") + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+The quarter(s) with the largest amount of sick days were **`r subset(tmp, cnt == max(cnt), select=dt, drop=TRUE)`**.  
+The quarter(s) with the smallest amount of sick days were **`r subset(tmp, cnt == min(cnt), select=dt, drop=TRUE)`**.
+
 
 ```{r byMonth, echo=FALSE}
 x <- strftime(data$Date, "%m") 
@@ -153,9 +217,8 @@ for (j in c("01","02","03","04","05","06","07","08","09","10","11","12")) {
     lev <- as.numeric(j)
     dt[lev] <- j
     cnt[lev] <- 0
-    
-    tmp <- data.frame(dt, cnt, stringsAsFactors = FALSE)
 }
+tmp <- data.frame(dt, cnt, stringsAsFactors = FALSE)
 
 tmp <- rbind(tmp, data.frame(dt = x, cnt = y))
 tmp <- aggregate(cnt ~ dt, tmp, sum)
@@ -166,8 +229,8 @@ g + geom_bar(stat="identity") + ggtitle("Leave taken by Month") + xlab("Month") 
 
 ```
 
-The month(s) with the largest amount of sick days were **`r subset(tmp, cnt == max(cnt), select=dt)`**.
-The month(s) with the smallest amount of sick days were **`r subset(tmp, cnt == min(cnt), select=dt)`**.
+The month(s) with the largest amount of sick days were **`r subset(tmp, cnt == max(cnt), select=dt, drop=TRUE)`**.  
+The month(s) with the smallest amount of sick days were **`r subset(tmp, cnt == min(cnt), select=dt, drop=TRUE)`**.
 
 ```{r byDOW, echo=FALSE}
 g <- ggplot(data, (aes(x = DOW)))
