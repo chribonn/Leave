@@ -100,3 +100,72 @@ ggByMonYr <- function (data, REPSTRTDT, REPENDDT) {
         ylab("Days") + theme(axis.text.x = element_text(angle = 90, hjust = 1))
     return (g)
 }
+
+ggByQtrYr <- function(data, REPSTRTDT, REPENDDT) {
+    x <- as.yearqtr(data$Date) 
+    y <- rep(1, length(x))
+    
+    RepStrtY <- as.numeric(format(REPSTRTDT, "%Y"))
+    RepStrtQ <- as.numeric(substr(quarters(REPSTRTDT), 2, 2))
+    RepEndY <- as.numeric(format(REPENDDT, "%Y"))
+    RepEndQ <- as.numeric(substr(quarters(REPENDDT), 2, 2))
+    
+    # Pre-Allocate the table
+    # The table will contain 4 quarters per year.
+    n <- (RepEndY - RepStrtY + 1) * 4
+    dt <- character(n)
+    cnt <- numeric(n)
+    for (i in RepStrtY:RepEndY) {
+        for (j in 1:4) {
+            if ((i == RepStrtY) && (j >= RepStrtQ)) {
+                if ((i == RepEndY) && (intj <= RepEndQ)) {
+                    lev <- (i - RepStrtY) * 4 + j
+                    dt[lev] <- paste0(as.character(i), " Q", as.character(j))
+                    cnt[lev] <- 0
+                }
+            }
+        }
+    }
+    tmp <- data.frame(dt=as.yearqtr(dt), cnt = cnt, stringsAsFactors = FALSE)
+    
+    tmp <- rbind(tmp, data.frame(dt = x, cnt = y, stringsAsFactors = FALSE))
+    tmp <- aggregate(cnt ~ dt, tmp, sum)
+    
+    g <- ggplot(tmp, (aes(x = as.character(dt), y = cnt)))
+    g <- g + geom_bar(stat="identity") + ggtitle("Leave taken by Quarter") + xlab("Quarter") +
+        ylab("Days") + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+    return (g)
+}
+
+ggByMon <- function(data, REPSTRTDT, REPENDDT) {
+    x <- strftime(data$Date, "%m") 
+    y <- rep(1, length(x))
+    
+    RepStrtY <- as.numeric(format(REPSTRTDT, "%Y"))
+    RepStrtM <- as.numeric(format(REPSTRTDT, "%m"))
+    RepEndY <- as.numeric(format(REPENDDT, "%Y"))
+    RepEndM <- as.numeric(format(REPENDDT, "%m"))
+    
+    # Pre-Allocate the table
+    n <- 12
+    dt <- character(n)
+    cnt <- numeric(n)
+    for (j in c("01","02","03","04","05","06","07","08","09","10","11","12")) {
+        lev <- as.numeric(j)
+        # this check is only necessary if incomplete data for one year is provided
+        if ((RepStrtY == RepEndY) && (RepStrtM >= lev) && (RepEndM <= lev)) {
+            dt[lev] <- j
+            cnt[lev] <- 0
+        }
+    }
+    tmp <- data.frame(dt[dt != ""], cnt[dt != ""], stringsAsFactors = FALSE)
+    
+    tmp <- rbind(tmp, data.frame(dt = x, cnt = y))
+    tmp <- aggregate(cnt ~ dt, tmp, sum)
+    
+    g <- ggplot(tmp, (aes(x = dt, y = cnt)))
+    g <- g + geom_bar(stat="identity") + ggtitle("Leave analysis by Month") + xlab("Month") +
+        ylab("Days")
+    return (g)
+}
+
